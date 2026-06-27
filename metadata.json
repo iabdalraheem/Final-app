@@ -1,0 +1,6 @@
+{
+  "name": "Smart Chess Board",
+  "description": "Minimalist real-time offline multiplayer chess clone with a built-in search minimax-pruning engine analysis system.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
