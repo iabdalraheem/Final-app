@@ -933,6 +933,332 @@ fun DashboardScreen(
                         }
             }
 
+            // --- BLUETOOTH BLE INTEGRATION ---
+            Spacer(modifier = Modifier.height(24.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Color(0xFFEADDFF), RoundedCornerShape(20.dp))
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Bluetooth,
+                                contentDescription = null,
+                                tint = Color(0xFF6750A4),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "الاتصال بلوحة ESP32 الذكية",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1B1B1F)
+                            )
+                        }
+                        
+                        val bleState by viewModel.bleConnectionState.collectAsState()
+                        val stateText = when (bleState) {
+                            com.example.chess.BleConnectionState.CONNECTED -> "متصل"
+                            com.example.chess.BleConnectionState.CONNECTING -> "جاري الاتصال..."
+                            com.example.chess.BleConnectionState.DISCONNECTED -> "غير متصل"
+                        }
+                        val stateColor = when (bleState) {
+                            com.example.chess.BleConnectionState.CONNECTED -> Color(0xFF2E7D32)
+                            com.example.chess.BleConnectionState.CONNECTING -> Color(0xFFF57C00)
+                            com.example.chess.BleConnectionState.DISCONNECTED -> Color(0xFFC62828)
+                        }
+                        
+                        Text(
+                            text = stateText,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = stateColor,
+                            modifier = Modifier
+                                .background(stateColor.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "اربط رقعتك الشطرنجية المصنوعة بـ ESP32 لتلقي حركاتك الحقيقية وتحديث الرقعة تلقائياً. تدعم الرقعة صيغة مثل 'e2:wp' أو 'e2:empty'.",
+                        fontSize = 12.sp,
+                        color = Color(0xFF49454F),
+                        lineHeight = 18.sp
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Mode Selector
+                    val isSmartBle by viewModel.smartBleMode.collectAsState()
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFFEF7FF), RoundedCornerShape(12.dp))
+                            .border(1.dp, Color(0xFFCAC4D0).copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isSmartBle) "وضع الحركات الذكي" else "وضع التزامن المباشر الحر",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1B1B1F)
+                            )
+                            Text(
+                                text = if (isSmartBle) "يتحقق من قوانين الشطرنج ويسجل النقلات الرسمية." else "تحديث فوري حر لقطع الرقعة دون قيود القوانين.",
+                                fontSize = 11.sp,
+                                color = Color(0xFF49454F)
+                            )
+                        }
+                        Switch(
+                            checked = isSmartBle,
+                            onCheckedChange = { viewModel.setSmartBleMode(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFF6750A4)
+                            )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    val isAutoConnectEnabled by viewModel.bleAutoConnectEnabled.collectAsState()
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFFEF7FF), RoundedCornerShape(12.dp))
+                            .border(1.dp, Color(0xFFCAC4D0).copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "التوصيل التلقائي بـ SmartChessboard",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1B1B1F)
+                            )
+                            Text(
+                                text = "يتم الاتصال تلقائياً عند العثور على رقعة SmartChessboard أثناء البحث.",
+                                fontSize = 11.sp,
+                                color = Color(0xFF49454F)
+                            )
+                        }
+                        Switch(
+                            checked = isAutoConnectEnabled,
+                            onCheckedChange = { viewModel.setBleAutoConnectEnabled(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFF6750A4)
+                            )
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    val bleState by viewModel.bleConnectionState.collectAsState()
+                    if (bleState == com.example.chess.BleConnectionState.DISCONNECTED) {
+                        val isScanning by viewModel.bleIsScanning.collectAsState()
+                        val scannedDevices by viewModel.bleScannedDevices.collectAsState()
+                        
+                        // Launcher for permissions
+                        val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                            contract = androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+                        ) { permissions ->
+                            val allGranted = permissions.values.all { it }
+                            if (allGranted) {
+                                viewModel.startBleScan()
+                            }
+                        }
+                        
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Button(
+                                onClick = {
+                                    if (isScanning) {
+                                        viewModel.stopBleScan()
+                                    } else {
+                                        val targetPermissions = if (android.os.Build.VERSION.SDK_INT >= 31) {
+                                            arrayOf(
+                                                android.Manifest.permission.BLUETOOTH_SCAN,
+                                                android.Manifest.permission.BLUETOOTH_CONNECT
+                                            )
+                                        } else {
+                                            arrayOf(
+                                                android.Manifest.permission.ACCESS_FINE_LOCATION,
+                                                android.Manifest.permission.ACCESS_COARSE_LOCATION
+                                            )
+                                        }
+                                        permissionLauncher.launch(targetPermissions)
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4)),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Bluetooth,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isScanning) "إيقاف البحث" else "البحث عن أجهزة",
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        
+                        if (isScanning && scannedDevices.isEmpty()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color(0xFF6750A4)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "جاري البحث عن أجهزة ESP32 بالجوار...",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF49454F)
+                                )
+                            }
+                        }
+                        
+                        if (scannedDevices.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "الأجهزة المكتشفة:",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1B1B1F)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                scannedDevices.forEach { device ->
+                                    @Suppress("MissingPermission")
+                                    val devName = device.name ?: "Unknown Device"
+                                    val isSmartBoard = devName == "SmartChessboard"
+                                    
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isSmartBoard) Color(0xFFF3EDF7) else Color(0xFFF7F2FA))
+                                            .then(
+                                                if (isSmartBoard) {
+                                                    Modifier.border(2.dp, Color(0xFF6750A4), RoundedCornerShape(8.dp))
+                                                } else Modifier
+                                            )
+                                            .clickable { viewModel.connectBleDevice(device) }
+                                            .padding(12.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = if (isSmartBoard) Icons.Default.SmartToy else Icons.Default.Bluetooth,
+                                                contentDescription = null,
+                                                tint = Color(0xFF6750A4),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(
+                                                        text = devName,
+                                                        fontSize = 13.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isSmartBoard) Color(0xFF6750A4) else Color(0xFF1B1B1F)
+                                                    )
+                                                    if (isSmartBoard) {
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text(
+                                                            text = "رقعتك الذكية ✨",
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.ExtraBold,
+                                                            color = Color.White,
+                                                            modifier = Modifier
+                                                                .background(Color(0xFF6750A4), RoundedCornerShape(4.dp))
+                                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                                Text(
+                                                    text = device.address,
+                                                    fontSize = 11.sp,
+                                                    color = Color(0xFF49454F)
+                                                )
+                                            }
+                                        }
+                                        Icon(
+                                            imageVector = if (isSmartBoard) Icons.Default.SettingsSuggest else Icons.Default.Refresh,
+                                            contentDescription = null,
+                                            tint = Color(0xFF6750A4),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        val lastMessage by viewModel.bleReceivedMessage.collectAsState()
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column {
+                                Text(
+                                    text = "آخر إشارة مستلمة من اللوحة:",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF49454F)
+                                )
+                                Text(
+                                    text = if (lastMessage.isEmpty()) "لا توجد إشارة بعد" else lastMessage,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF6750A4)
+                                )
+                            }
+                            Button(
+                                onClick = { viewModel.disconnectBle() },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB3261E))
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("قطع الاتصال")
+                            }
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(40.dp))
         }
     }

@@ -105,10 +105,185 @@ class ChessViewModel(private val context: Context) : ViewModel() {
     private var clockJob: Job? = null
     private var analysisJob: Job? = null
 
+    // Bluetooth LE Manager & States
+    val bleManager by lazy { BleManager(context) }
+    val bleConnectionState by lazy { bleManager.connectionState }
+    val bleScannedDevices by lazy { bleManager.scannedDevices }
+    val bleIsScanning by lazy { bleManager.isScanning }
+    val bleReceivedMessage by lazy { bleManager.receivedMessage }
+    val bleAutoConnectEnabled by lazy { bleManager.autoConnectEnabled }
+
+    fun setBleAutoConnectEnabled(enabled: Boolean) {
+        bleManager.setAutoConnectEnabled(enabled)
+    }
+
+    var bleLiftedPosition: Position? = null
+    var bleLiftedPiece: Piece? = null
+
+    private val _smartBleMode = MutableStateFlow(true)
+    val smartBleMode: StateFlow<Boolean> = _smartBleMode.asStateFlow()
+
+    fun setSmartBleMode(enabled: Boolean) {
+        _smartBleMode.value = enabled
+    }
+
     init {
         startClocks()
         triggerAnalysis()
+        bleManager.onMessageReceived = { message ->
+            processBleMessage(message)
+        }
     }
+
+    fun startBleScan() {
+        bleManager.startScanning()
+    }
+
+    fun stopBleScan() {
+        bleManager.stopScanning()
+    }
+
+    fun connectBleDevice(device: android.bluetooth.BluetoothDevice) {
+        bleManager.connect(device)
+    }
+
+    fun disconnectBle() {
+        bleManager.disconnect()
+    }
+
+    private fun parsePiece(pieceStr: String): Piece? {
+        val s = pieceStr.lowercase().trim()
+        if (s == "empty" || s == "none" || s == "ee" || s == "" || s == "null") return null
+        if (s.length < 2) return null
+        
+        val color = if (s[0] == 'w') PieceColor.WHITE else if (s[0] == 'b') PieceColor.BLACK else return null
+        val type = when (s[1]) {
+            'p' -> PieceType.PAWN
+            'n' -> PieceType.KNIGHT
+            'b' -> PieceType.BISHOP
+            'r' -> PieceType.ROOK
+            'q' -> PieceType.QUEEN
+            'k' -> PieceType.KING
+            else -> return null
+        }
+        return Piece(type, color)
+    }
+
+    fun processBleMessage(message: String) {
+        val parts = message.split(":")
+        if (parts.size < 2) return
+        
+        val coord = parts[0].trim().lowercase()
+        val pieceStr = parts[1].trim().lowercase()
+        
+        val pos = Position.fromAlgebraic(coord) ?: return
+        val activeGame = _game.value
+        
+        val incomingPiece = parsePiece(pieceStr)
+        
+        if (incomingPiece == null) {
+            // Square became empty
+            val existingPiece = activeGame.board.getPiece(pos)
+            if (existingPiece != null) {
+                // Only register the lift if the piece belongs to the active turn side, or in analysis mode
+                if (existingPiece.color == activeGame.turn || _gameMode.value == GameMode.ANALYSIS) {
+                    bleLiftedPosition = pos
+                    bleLiftedPiece = existingPiece
+                }
+                
+                if (!_smartBleMode.value || _gameMode.value == GameMode.ANALYSIS) {
+                    activeGame.board.setPiece(pos, null)
+                    _game.value = activeGame.cloneGame()
+                    triggerAnalysis()
+                }
+            }
+        } else {
+            // Square became occupied
+            val currentPieceOnDigitalBoard = activeGame.board.getPiece(pos)
+            if (currentPieceOnDigitalBoard == incomingPiece) {
+                // The digital board already has this piece on this square!
+                // This means the physical board is just syncing/mirroring a move that was already made on the screen (e.g., by the computer or via UI click).
+                // We don't need to do anything, just clear the lifted state.
+                bleLiftedPosition = null
+                bleLiftedPiece = null
+                return
+            }
+
+            val liftedPos = bleLiftedPosition
+            val liftedP = bleLiftedPiece
+            
+            if (_smartBleMode.value) {
+                // Find all legal moves for the current turn's color that end at 'pos' and match the incoming piece
+                val searchColors = if (_gameMode.value == GameMode.ANALYSIS) {
+                    listOf(PieceColor.WHITE, PieceColor.BLACK)
+                } else {
+                    listOf(activeGame.turn)
+                }
+                
+                val candidateMoves = mutableListOf<Move>()
+                for (color in searchColors) {
+                    for (r in 0..7) {
+                        for (c in 0..7) {
+                            val fromPos = Position(r, c)
+                            val p = activeGame.board.getPiece(fromPos)
+                            if (p != null && p.color == color) {
+                                val legalMoves = activeGame.getLegalMoves(fromPos)
+                                val matches = legalMoves.filter { move ->
+                                    move.to == pos && (
+                                        // Either the piece type and color match exactly
+                                        (move.pieceMoved.type == incomingPiece.type && move.pieceMoved.color == incomingPiece.color) ||
+                                        // Or it's a promotion where the color matches and the promotion result matches the placed piece
+                                        (move.promotionResult != null && move.pieceMoved.color == incomingPiece.color && move.promotionResult == incomingPiece.type)
+                                    )
+                                }
+                                candidateMoves.addAll(matches)
+                            }
+                        }
+                    }
+                }
+                
+                var selectedMove: Move? = null
+                if (candidateMoves.isNotEmpty()) {
+                    if (candidateMoves.size == 1) {
+                        // Unambiguous: Only one legal move can reach this square with this piece type and color
+                        selectedMove = candidateMoves[0]
+                    } else {
+                        // Ambiguity: Multiple legal moves of this piece type and color can reach this square
+                        // 1. Prioritize matching the lifted position if we have one
+                        if (liftedPos != null) {
+                            selectedMove = candidateMoves.find { it.from == liftedPos }
+                        }
+                        
+                        // 2. If no lift match, fallback to the first candidate move
+                        if (selectedMove == null) {
+                            selectedMove = candidateMoves[0]
+                        }
+                    }
+                }
+                
+                if (selectedMove != null) {
+                    executeMove(selectedMove)
+                    bleLiftedPosition = null
+                    bleLiftedPiece = null
+                } else {
+                    // Strictly enforce Chess rules: if the move played physically is not legal,
+                    // do NOT update the board state. We just vibrate longer as a warning.
+                    vibrateDevice(250)
+                    android.util.Log.w("BleManager", "Illegal physical move to $coord with piece $pieceStr rejected.")
+                    
+                    // We keep the board state exactly as is, but we clear the lifted state to allow retrying
+                    bleLiftedPosition = null
+                    bleLiftedPiece = null
+                }
+            } else {
+                // Free sync mode: just set the piece directly
+                activeGame.board.setPiece(pos, incomingPiece)
+                _game.value = activeGame.cloneGame()
+                triggerAnalysis()
+            }
+        }
+    }
+
 
     fun setGameMode(mode: GameMode) {
         _gameMode.value = mode
