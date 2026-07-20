@@ -1,21 +1,67 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Smart Chessboard — Android App
 
-# Run and deploy your AI Studio app
+The companion Android app for **Smart Chessboard**, an electronic chessboard that automatically detects piece movement and syncs live over Bluetooth Low Energy (BLE).
 
-This contains everything you need to run your app locally.
+> Part of the Smart Chessboard graduation project — Control and Automation Engineering, Technical Engineering Institute (Mechanical and Electrical), University of Aleppo.
+> Full project repository: [smart-chessboard](#) <!-- replace # with your main repo link -->
 
-View your app in AI Studio: https://ai.studio/apps/4897de9f-b1e5-4bf5-80f1-34e40f2b41f8
+---
 
-## Run Locally
+## 📱 About
 
-**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
+This app connects to the Smart Chessboard hardware over BLE, displays the live board state in real time, and keeps a local history of completed matches.
 
+## ✨ Features
 
-1. Open Android Studio
-2. Select **Open** and choose the directory containing this project
-3. Allow Android Studio to fix any incompatibilities as it imports the project.
-4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
-5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
-6. Run the app on an emulator or physical device
+- **Live board sync** — real-time updates via BLE as pieces move
+- **Match history** — automatically saved and browsable, stored locally
+- **Mock mode** — full UI/UX testable without physical hardware, using a simulated BLE service
+
+## 🏗️ Architecture
+
+- **Language:** Kotlin
+- **UI:** Jetpack Compose
+- **Pattern:** MVVM (ViewModel + StateFlow)
+- **Local storage:** Room database
+- **Connectivity:** BLE — Nordic UART Service
+
+**BLE Configuration:**
+| Item | UUID |
+|---|---|
+| Service | `12345678-1234-1234-1234-123456789abc` |
+| Notify characteristic | `12345678-1234-1234-1234-123456789ab1` |
+| Device name | `SmartChessboard` |
+
+## 🚀 Getting Started
+
+1. Clone the repository
+2. Open the project in **Android Studio**
+3. Let Gradle sync dependencies
+4. Run on a device or emulator
+
+### Testing without hardware
+The app includes a `MockBleChessService` that simulates board data, so the full UI/UX can be tested without a physical Smart Chessboard connected.
+
+## 📂 Project Structure
+
+```
+app/
+├── src/
+│   ├── main/
+│   │   ├── java/...     # ViewModels, UI (Compose), Room entities
+│   │   └── res/         # Resources
+└── build.gradle.kts
+```
+
+## 👥 Team
+
+- **Raheem** — App & Firmware Development
+- **Abdullah Taweel**
+- **Amro Qadi Riha**
+- **Sedra Zrek**
+
+Supervised by **Eng. Heba Kharma**
+
+## 📄 License
+
+*(Add your preferred license here — MIT, Apache 2.0, etc.)*
