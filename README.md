@@ -3,7 +3,7 @@
 The companion Android app for **Smart Chessboard**, an electronic chessboard that automatically detects piece movement and syncs live over Bluetooth Low Energy (BLE).
 
 > Part of the Smart Chessboard graduation project — Control and Automation Engineering, Technical Engineering Institute (Mechanical and Electrical), University of Aleppo.
-> Full project repository: [smart-chessboard](#) <!-- replace # with your main repo link -->
+> Full project repository: [smart-chessboard](https://github.com/iabdalraheem/smartchessboard) <!-- replace # with your main repo link -->
 
 ---
 
